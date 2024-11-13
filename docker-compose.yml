@@ -1,0 +1,94 @@
+version: '3.7'
+
+services:
+  # Service MySQL pour WordPress
+  mysql-wordpress:
+    image: mysql:5.7
+    environment:
+      MYSQL_ROOT_PASSWORD: wordpresspassword
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wordpressuser
+      MYSQL_PASSWORD: wordpresspassword
+    volumes:
+      - wordpress-data:/var/lib/mysql
+    networks:
+      - wordpress-zabbix-network
+
+  # Service WordPress
+  wordpress:
+    image: wordpress
+    environment:
+      WORDPRESS_DB_HOST: mysql-wordpress:3306
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_DB_USER: wordpressuser
+      WORDPRESS_DB_PASSWORD: wordpresspassword
+    ports:
+      - "8080:80"  # WordPress sur le port 8080
+    depends_on:
+      - mysql-wordpress
+    networks:
+      - wordpress-zabbix-network
+
+  # Service MySQL pour Zabbix
+  mysql-zabbix:
+    image: mysql:5.7
+    environment:
+      MYSQL_ROOT_PASSWORD: zabbixpassword
+      MYSQL_DATABASE: zabbix
+      MYSQL_USER: zabbixuser
+      MYSQL_PASSWORD: zabbixpassword
+    volumes:
+      - zabbix-data:/var/lib/mysql
+    networks:
+      - wordpress-zabbix-network
+
+  # Service Zabbix Server
+  zabbix-server:
+    image: zabbix/zabbix-server-mysql:latest
+    environment:
+      DB_SERVER_HOST: mysql-zabbix
+      MYSQL_DATABASE: zabbix
+      MYSQL_USER: zabbixuser
+      MYSQL_PASSWORD: zabbixpassword
+      ZBX_ENABLE_TLS: "no"  # Si vous ne voulez pas utiliser TLS
+    ports:
+      - "8081:80"  # Port du serveur Zabbix
+    depends_on:
+      - mysql-zabbix
+    networks:
+      - wordpress-zabbix-network
+
+  # Service Zabbix Frontend (interface web)
+  zabbix-web:
+    image: zabbix/zabbix-web-nginx-mysql:latest
+    environment:
+      ZBX_SERVER_HOST: zabbix-server
+      MYSQL_DATABASE: zabbix
+      MYSQL_USER: zabbixuser
+      MYSQL_PASSWORD: zabbixpassword
+      PHP_TZ: Europe/Paris  # Vous pouvez ajuster le fuseau horaire
+    ports:
+      - "8082:80"  # Zabbix Web sur le port 8082
+    depends_on:
+      - zabbix-server
+    networks:
+      - wordpress-zabbix-network
+
+  # Service Zabbix Agent
+  zabbix-agent:
+    image: zabbix/zabbix-agent:latest
+    environment:
+      ZBX_SERVER_HOST: zabbix-server
+      ZBX_HOSTNAME: "docker-host"
+    networks:
+      - wordpress-zabbix-network
+
+# Volumes pour la persistance des données
+volumes:
+  wordpress-data:
+  zabbix-data:
+
+# Réseau Docker pour WordPress et Zabbix
+networks:
+  wordpress-zabbix-network:
+    driver: bridge

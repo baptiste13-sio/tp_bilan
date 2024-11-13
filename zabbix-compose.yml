@@ -1,0 +1,64 @@
+version: '3.7'
+
+services:
+  # Service MySQL pour Zabbix
+  mysql:
+    image: mysql:5.7
+    environment:
+      MYSQL_ROOT_PASSWORD: zabbixpassword
+      MYSQL_DATABASE: zabbix
+      MYSQL_USER: zabbixuser
+      MYSQL_PASSWORD: zabbixpassword
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - zabbix-network
+
+  # Service Zabbix Server
+  zabbix-server:
+    image: zabbix/zabbix-server-mysql:latest
+    environment:
+      DB_SERVER_HOST: mysql
+      MYSQL_DATABASE: zabbix
+      MYSQL_USER: zabbixuser
+      MYSQL_PASSWORD: zabbixpassword
+      ZBX_ENABLE_TLS: "no"  # Si vous ne voulez pas utiliser TLS
+    ports:
+      - "8081:80"  # Port d'écoute du serveur Zabbix
+    depends_on:
+      - mysql
+    networks:
+      - zabbix-network
+  # Service Zabbix Frontend (interface web)
+  zabbix-web:
+    image: zabbix/zabbix-web-nginx-mysql:latest
+    environment:
+      ZBX_SERVER_HOST: zabbix-server
+      MYSQL_DATABASE: zabbix
+      MYSQL_USER: zabbixuser
+      MYSQL_PASSWORD: zabbixpassword
+      PHP_TZ: Europe/Paris  # Vous pouvez ajuster le fuseau horaire
+    ports:
+      - "8082:80"  # Port pour accéder à l'interface web de Zabbix
+    depends_on:
+      - zabbix-server
+    networks:
+      - zabbix-network
+
+  # Service Zabbix Agent (optionnel, à utiliser sur les hôtes monitorés)
+  zabbix-agent:
+    image: zabbix/zabbix-agent:latest
+    environment:
+      ZBX_SERVER_HOST: zabbix-server
+      ZBX_HOSTNAME: "docker-host"
+    networks:
+      - zabbix-network
+
+# Définition du volume persistant pour MySQL
+volumes:
+  mysql-data:
+
+# Définition du réseau Docker
+networks:
+  zabbix-network:
+    driver: bridge
